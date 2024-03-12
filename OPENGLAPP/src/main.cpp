@@ -32,7 +32,6 @@ protected:
 		aie::ImGui_Init(window, true);
 
 		Gizmos::create(10000, 10000, 10000, 10000);
-		float aspectRatio = (float)GetWindowWidth() / GetWindowHeight();
 
 		m_gridTexture.load("./res/textures/numbered_grid.tga");
 

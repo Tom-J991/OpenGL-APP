@@ -10,6 +10,7 @@ struct GLFWStuff
 };
 static GLFWStuff s_glfwStuff;
 
+static void WindowResizeCallback(GLFWwindow *window, int width, int height);
 static void MousePositionCallback(GLFWwindow *window, double x, double y);
 
 Application *Application::s_instance = nullptr;
@@ -49,6 +50,7 @@ bool Application::Run()
 	}
 	std::cout << "OpenGL " << GLVersion.major << "." << GLVersion.minor << std::endl;
 
+	glfwSetWindowSizeCallback(s_glfwStuff.window, &WindowResizeCallback);
 	glfwSetCursorPosCallback(s_glfwStuff.window, &MousePositionCallback);
 
 	glEnable(GL_DEPTH_TEST);
@@ -91,6 +93,13 @@ bool Application::Run()
 void *Application::GetRawWindowHandle()
 {
 	return (void*)s_glfwStuff.window;
+}
+
+void WindowResizeCallback(GLFWwindow *window, int width, int height)
+{
+	Application::Instance()->SetWindowWidth(width);
+	Application::Instance()->SetWindowHeight(height);
+	glViewport(0, 0, width, height);
 }
 
 void MousePositionCallback(GLFWwindow *window, double x, double y)

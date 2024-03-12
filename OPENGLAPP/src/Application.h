@@ -15,6 +15,8 @@ public:
 	const char *GetWindowTitle() const { return m_windowTitle; }
 	unsigned int GetWindowWidth() const { return m_windowWidth; }
 	unsigned int GetWindowHeight() const { return m_windowHeight; }
+	void SetWindowWidth(const unsigned int width) { m_windowWidth = width; }
+	void SetWindowHeight(const unsigned int height) { m_windowHeight = height; }
 
 	bool IsFullscreen() { return m_isFullscreen; }
 
