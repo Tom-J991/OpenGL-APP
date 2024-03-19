@@ -10,26 +10,30 @@ Camera::Camera()
 Camera::~Camera()
 { }
 
-void Camera::Update(float dt)
+void Camera::DoFlyCam(float dt)
 {
 	GLFWwindow *window = (GLFWwindow*)Application::Instance()->GetRawWindowHandle();
 
 	float thetaR = glm::radians(m_theta);
 	float phiR = glm::radians(m_phi);
 
+	// Get camera directions.
 	glm::vec3 forward(glm::cos(phiR) * glm::cos(thetaR), glm::sin(phiR), glm::cos(phiR) * glm::sin(thetaR));
 	glm::vec3 right(-glm::sin(thetaR), 0.0f, glm::cos(thetaR));
 	glm::vec3 up(0.0f, 1.0f, 0.0f);
 
+	// Fly up and down.
 	const float movingSpeed = 2.0f;
 	if (glfwGetKey(window, GLFW_KEY_SPACE)) m_position += up * movingSpeed * dt;
 	if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT)) m_position -= up * movingSpeed * dt;
 
+	// WASD movement.
 	if (glfwGetKey(window, GLFW_KEY_W)) m_position += forward * movingSpeed * dt;
 	if (glfwGetKey(window, GLFW_KEY_S)) m_position -= forward * movingSpeed * dt;
 	if (glfwGetKey(window, GLFW_KEY_A)) m_position -= right * movingSpeed * dt;
 	if (glfwGetKey(window, GLFW_KEY_D)) m_position += right * movingSpeed * dt;
 
+	// Look around.
 	const float turningSpeed = 0.5f;
 	glm::vec2 mouseDelta = Application::Instance()->GetMouseDelta();
 	if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)

@@ -568,11 +568,11 @@ void Gizmos::addSphere(const glm::vec3& center, float radius, int rows, int colu
 		if( iNextFace % columns == 0 )
 			iNextFace = iNextFace - (columns);
 
-		addLine(tempCenter + v4Array[face], tempCenter + v4Array[face+columns], glm::vec4(1.f,1.f,1.f,1.f), glm::vec4(1.f,1.f,1.f,1.f));
+		//addLine(tempCenter + v4Array[face], tempCenter + v4Array[face+columns], glm::vec4(1.f,1.f,1.f,1.f), glm::vec4(1.f,1.f,1.f,1.f));
 		
 		if( face % columns == 0 && longitudinalRange < (glm::pi<float>() * 2))
 			continue;
-		addLine(tempCenter + v4Array[iNextFace+columns], tempCenter + v4Array[face+columns], glm::vec4(1.f,1.f,1.f,1.f), glm::vec4(1.f,1.f,1.f,1.f));
+		//addLine(tempCenter + v4Array[iNextFace+columns], tempCenter + v4Array[face+columns], glm::vec4(1.f,1.f,1.f,1.f), glm::vec4(1.f,1.f,1.f,1.f));
 
 		addTri(tempCenter + v4Array[iNextFace+columns], tempCenter + v4Array[face], tempCenter + v4Array[iNextFace], fillColour);
 		addTri(tempCenter + v4Array[iNextFace+columns], tempCenter + v4Array[face+columns], tempCenter + v4Array[face], fillColour);

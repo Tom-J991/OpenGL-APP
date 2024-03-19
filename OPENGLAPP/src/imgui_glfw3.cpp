@@ -119,11 +119,11 @@ void ImGui_RenderDrawLists(ImDrawData* draw_data) {
     glViewport(last_viewport[0], last_viewport[1], (GLsizei)last_viewport[2], (GLsizei)last_viewport[3]);
 }
 
-static const char* ImGui_GetClipboardText() {
+static const char* ImGui_GetClipboardText(void *user_data) {
     return glfwGetClipboardString(g_Window);
 }
 
-static void ImGui_SetClipboardText(const char* text) {
+static void ImGui_SetClipboardText(void *user_data, const char* text) {
     glfwSetClipboardString(g_Window, text);
 }
 

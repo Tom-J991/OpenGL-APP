@@ -2,6 +2,7 @@
 
 #include "Common.h"
 
+// Application interface.
 class Application
 {
 public:
@@ -10,7 +11,10 @@ public:
 
 	bool Run();
 
-	static Application *Instance() { return s_instance; }
+	void ClearScreen();
+	void UpdateWindow();
+
+	static Application *Instance() { return s_instance; } // Singleton.
 
 	const char *GetWindowTitle() const { return m_windowTitle; }
 	unsigned int GetWindowWidth() const { return m_windowWidth; }

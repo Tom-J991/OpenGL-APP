@@ -1,4 +1,6 @@
-#version 410 core
+#version 430 core
+
+// Basic lit shader.
 
 layout (location = 0) in vec4 aPos;
 layout (location = 1) in vec4 aNormal;
@@ -10,13 +12,16 @@ out vec3 vNormal;
 out vec2 vTexCoords;
 out vec3 vTangent;
 out vec3 vBiTangent;
+out vec3 vViewPosition;
 
 uniform mat4 model;
+uniform mat4 view;
 uniform mat4 mvp;
 
 void main()
 {
 	vPosition = model * aPos;
+	vViewPosition = (view * vPosition).xyz;
 	vNormal = (model * aNormal).xyz;
 	vTexCoords = aTexCoords;
 	vTangent = (model * vec4(aTangent.xyz, 0.0)).xyz;

@@ -22,14 +22,14 @@
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
-    <CharacterSet>Unicode</CharacterSet>
+    <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>Unicode</CharacterSet>
+    <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -93,8 +93,11 @@
     <ClCompile Include="src\Gizmos.cpp" />
     <ClCompile Include="src\glad.c" />
     <ClCompile Include="src\imgui_glfw3.cpp" />
+    <ClCompile Include="src\Instance.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\Mesh.cpp" />
+    <ClCompile Include="src\RenderTarget.cpp" />
+    <ClCompile Include="src\Scene.cpp" />
     <ClCompile Include="src\Shader.cpp" />
     <ClCompile Include="src\Texture.cpp" />
   </ItemGroup>
@@ -107,7 +110,11 @@
     <ClInclude Include="src\Common.h" />
     <ClInclude Include="src\Gizmos.h" />
     <ClInclude Include="src\imgui_glfw3.h" />
+    <ClInclude Include="src\Instance.h" />
+    <ClInclude Include="src\Light.h" />
     <ClInclude Include="src\Mesh.h" />
+    <ClInclude Include="src\RenderTarget.h" />
+    <ClInclude Include="src\Scene.h" />
     <ClInclude Include="src\Shader.h" />
     <ClInclude Include="src\Texture.h" />
   </ItemGroup>

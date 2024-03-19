@@ -8,12 +8,12 @@ struct GLFWStuff
 {
 	GLFWwindow *window;
 };
-static GLFWStuff s_glfwStuff;
+static GLFWStuff s_glfwStuff; // An abstraction that isn't really necessary in this application on hindsight.
 
 static void WindowResizeCallback(GLFWwindow *window, int width, int height);
 static void MousePositionCallback(GLFWwindow *window, double x, double y);
 
-Application *Application::s_instance = nullptr;
+Application *Application::s_instance = nullptr; // So the static variable is in a translation unit and can be used.
 Application::Application(const char *title, unsigned int width, unsigned int height, bool fullscreen)
 	: m_windowTitle(title)
 	, m_windowWidth(width)
@@ -23,10 +23,11 @@ Application::Application(const char *title, unsigned int width, unsigned int hei
 Application::~Application()
 { }
 
-bool Application::Run()
+bool Application::Run() // Basically does everything.
 {
 	s_instance = this;
 
+	// Initialise GLFW and window.
 	if (!glfwInit()) { std::cout << "Error occured in glfwInit" << std::endl; return false; }
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
@@ -41,7 +42,7 @@ bool Application::Run()
 	}
 	glfwMakeContextCurrent(s_glfwStuff.window);
 
-	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) // Load OpenGL functions with GLAD.
 	{
 		std::cout << "Error occured in gladLoadGLLoader" << std::endl;
 		glfwDestroyWindow(s_glfwStuff.window);
@@ -50,53 +51,74 @@ bool Application::Run()
 	}
 	std::cout << "OpenGL " << GLVersion.major << "." << GLVersion.minor << std::endl;
 
+	// Setup input/window callbacks.
 	glfwSetWindowSizeCallback(s_glfwStuff.window, &WindowResizeCallback);
 	glfwSetCursorPosCallback(s_glfwStuff.window, &MousePositionCallback);
 
+	// Setup OpenGL.
+	//glEnable(GL_FRAMEBUFFER_SRGB); // Enable SRGB.
+	//glDisable(0x809D); // Disable Multisampling.
+
 	glEnable(GL_DEPTH_TEST);
 
+	// Call application init.
 	if (!Init()) { std::cout << "Error occured whilst initializing application!" << std::endl; return false; }
 
-	float prevTime = (float)glfwGetTime();
+	double prevTime = glfwGetTime();
 
+	// Do Update Loop.
 	m_isRunning = true;
 	while (m_isRunning == true)
 	{
-		float currentTime = (float)glfwGetTime();
-		float deltaTime = currentTime - prevTime;
+		double currentTime = glfwGetTime();
+		float deltaTime = (float)(currentTime - prevTime);
 		prevTime = currentTime;
 
+		// Call application update.
 		if (!Update(deltaTime)) { std::cout << "Error occured in application update!" << std::endl; return false; }
 
-		m_lastMousePosition = m_mousePosition;
+		m_lastMousePosition = m_mousePosition; // Set last position after update.
 
-		glClearDepth(1.0f);
-		glClearColor(m_backgroundColor.r, m_backgroundColor.g, m_backgroundColor.b, m_backgroundColor.a);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		glViewport(0, 0, m_windowWidth, m_windowHeight);
+		// Call application draw.
 		if (!Draw()) { std::cout << "Error occured in application draw!" << std::endl; return false; }
 
-		glfwSwapBuffers(s_glfwStuff.window);
-		glfwPollEvents();
-
-		m_isRunning = !glfwWindowShouldClose(s_glfwStuff.window);
+		UpdateWindow(); // Update the window.
+		m_isRunning = !glfwWindowShouldClose(s_glfwStuff.window); // Check if application should keep updating.
 	}
-
+	
+	// Call application shutdown.
 	if (!Shutdown()) { std::cout << "Error occured whilst shutting down application!" << std::endl; return false; }
 
+	// Destroy GLFW.
 	glfwDestroyWindow(s_glfwStuff.window);
 	glfwTerminate();
 
 	return true;
 }
 
+void Application::ClearScreen()
+{
+	// Hopefully self explanatory.
+	glClearColor(m_backgroundColor.r, m_backgroundColor.g, m_backgroundColor.b, m_backgroundColor.a);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glViewport(0, 0, m_windowWidth, m_windowHeight); // Set viewport to fill window.
+}
+
+void Application::UpdateWindow()
+{
+	// Swap back buffer and poll window messages.
+	glfwSwapBuffers(s_glfwStuff.window);
+	glfwPollEvents();
+}
+
 void *Application::GetRawWindowHandle()
 {
-	return (void*)s_glfwStuff.window;
+	return (void*)s_glfwStuff.window; // Returns window, has to be casted back to GLFWwindow* because of the unnecessary abstraction I did.
 }
 
 void WindowResizeCallback(GLFWwindow *window, int width, int height)
 {
+	// Set new window size and update viewport.
 	Application::Instance()->SetWindowWidth(width);
 	Application::Instance()->SetWindowHeight(height);
 	glViewport(0, 0, width, height);
@@ -104,6 +126,7 @@ void WindowResizeCallback(GLFWwindow *window, int width, int height)
 
 void MousePositionCallback(GLFWwindow *window, double x, double y)
 {
+	// Gets the mouse position.
 	glm::vec2 position = glm::vec2((float)x, (float)y);
 	Application::Instance()->SetMousePosition(position);
 }
