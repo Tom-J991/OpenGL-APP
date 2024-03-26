@@ -123,6 +123,7 @@ void Mesh::InitializeFromFile(const char *filePath)
 void Mesh::LoadMaterial(const char *filePath)
 {
 	std::fstream file(filePath, std::ios::in);
+	std::stringstream contents;
 	std::string line;
 	std::string header;
 	char buffer[256];
@@ -136,6 +137,7 @@ void Mesh::LoadMaterial(const char *filePath)
 	{
 		file.getline(buffer, 256);
 		line = buffer;
+		contents << line;
 		std::stringstream ss(line, std::stringstream::in | std::stringstream::out);
 		if (line.find("Ka") == 0) // Ambient colour
 			ss >> header >> Ka.x >> Ka.y >> Ka.z;
@@ -150,7 +152,6 @@ void Mesh::LoadMaterial(const char *filePath)
 			std::string mapFileName;
 			ss >> header >> mapFileName;
 			mapKd.load((directory + mapFileName).c_str());
-			//mapKd.load("./res/textures/bread.jpg");
 		}
 		else if (line.find("map_Ks") == 0) // Specular texture.
 		{
@@ -165,12 +166,77 @@ void Mesh::LoadMaterial(const char *filePath)
 			mapBump.load((directory + mapFileName).c_str());
 		}
 	}
+
+	// Fallback textures.
+	// TODO: probably could handle the fallback checking better,
+	// currently storing all the contents of the material file in a stringstream and then looking through it to see if the maps are defined.
+	// TODO: Fix these fallback textures, they seem to break lighting even though they shouldn't???
+	const unsigned int width = 8;
+	const unsigned int height = 8;
+	if (contents.str().find("map_Kd") == std::string::npos)
+	{
+		const size_t size = (width * height) * 3;
+		unsigned char pixels[size];
+		for (int i = 0, k = 0; i < size; i += 3, k++)
+		{
+			// funny css missing texture pattern
+			if (k >= size || i >= size) break;
+			int x = (k) % width;
+			int y = (k) / width;
+			if ((x + y) % 2 == 0)
+			{
+				// pink
+				pixels[i+0] = 0xFF; // r
+				pixels[i+1] = 0x00; // g
+				pixels[i+2] = 0xFF; // b
+			}
+			else
+			{
+				// black
+				pixels[i+0] = 0x00; // r
+				pixels[i+1] = 0x00; // g
+				pixels[i+2] = 0x00; // b
+			}
+		}
+
+		mapKd.create(width, height, aie::Texture::Format::RGB, pixels);
+	}
+	else if (contents.str().find("map_Ks") == std::string::npos)
+	{
+		const size_t size = (width * height) * 3;
+		unsigned char pixels[size];
+		for (int i = 0; i < size; i += 3)
+		{
+			// black
+			if (i >= size) break;
+			pixels[i+0] = 0x00; // r
+			pixels[i+1] = 0x00; // g
+			pixels[i+2] = 0x00; // b
+		}
+
+		mapKs.create(width, height, aie::Texture::Format::RGB, pixels);
+	}
+	else if (contents.str().find("bump") == std::string::npos)
+	{
+		const size_t size = (width * height) * 3;
+		unsigned char pixels[size];
+		for (int i = 0; i < size; i += 3)
+		{
+			// normal map neutral blue (127, 127, 255)
+			if (i >= size) break;
+			pixels[i+0] = 0x7F; // r
+			pixels[i+1] = 0x7F; // g
+			pixels[i+2] = 0xFF; // b
+		}
+
+		mapBump.create(width, height, aie::Texture::Format::RGB, pixels);
+	}
 }
 
 void Mesh::ApplyMaterial(aie::ShaderProgram *shader)
 {
 	// Bind material information to shader.
-	shader->bindUniform("specular", specular);
+	shader->bindUniform("specular", specular); // TODO: fix bug with shader stating "specular" is not being found or used even though it is?
 	shader->bindUniform("Ka", Ka);
 	shader->bindUniform("Kd", Kd);
 	shader->bindUniform("Ks", Ks);
@@ -280,6 +346,613 @@ void Mesh::InitializeFullscreenQuad()
 
 	glBindVertexArray(0);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+void Mesh::InitializePrimitive(PrimitiveID type)
+{
+	constexpr float unit = 1.0f;
+
+	Vertex *vertices = nullptr;
+	std::vector<unsigned int> indices;
+	unsigned int vertexCount = 0;
+
+	switch (type)
+	{
+		case PRIMITIVE_TRIANGLE:
+		{
+			vertexCount = 3;
+			vertices = new Vertex[vertexCount];
+
+			vertices[0].position = glm::vec4(-unit, -unit, 0.0f, 1.0f);
+			vertices[1].position = glm::vec4(0.0f, unit, 0.0f, 1.0f);
+			vertices[2].position = glm::vec4(unit, -unit, 0.0f, 1.0f);
+
+			vertices[0].normal = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
+			vertices[1].normal = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
+			vertices[2].normal = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
+
+			vertices[0].texCoord = glm::vec2(0.0f, 0.0f);
+			vertices[1].texCoord = glm::vec2(0.5f, 1.0f);
+			vertices[2].texCoord = glm::vec2(1.0f, 0.0f);
+		} break;
+		case PRIMITIVE_QUAD:
+		{
+			vertexCount = 4;
+			vertices = new Vertex[vertexCount];
+
+			vertices[0].position = glm::vec4(-unit, unit, 0.0f, 1.0f);
+			vertices[1].position = glm::vec4(unit, unit, 0.0f, 1.0f);
+			vertices[2].position = glm::vec4(-unit, -unit, 0.0f, 1.0f);
+			vertices[3].position = glm::vec4(unit, -unit, 0.0f, 1.0f);
+
+			vertices[0].normal = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
+			vertices[1].normal = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
+			vertices[2].normal = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
+			vertices[3].normal = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
+
+			vertices[0].texCoord = glm::vec2(0.0f, 1.0f);
+			vertices[1].texCoord = glm::vec2(1.0f, 1.0f);
+			vertices[2].texCoord = glm::vec2(0.0f, 0.0f);
+			vertices[3].texCoord = glm::vec2(1.0f, 0.0f);
+
+			indices.push_back(0);
+			indices.push_back(2);
+			indices.push_back(1);
+			indices.push_back(2);
+			indices.push_back(3);
+			indices.push_back(1);
+		} break;
+		case PRIMITIVE_CUBE:
+		{
+			// TODO: cube generation could probably be done in a for loop or two instead of being written out entirely.
+			vertexCount = 24; // 4 vertices for (6) sides.
+			vertices = new Vertex[vertexCount];
+
+			unsigned int index = 0;
+			// Front
+			vertices[index + 0].position = glm::vec4(-unit, unit, unit, 1.0f);
+			vertices[index + 1].position = glm::vec4(unit, unit, unit, 1.0f);
+			vertices[index + 2].position = glm::vec4(-unit, -unit, unit, 1.0f);
+			vertices[index + 3].position = glm::vec4(unit, -unit, unit, 1.0f);
+
+			vertices[index + 0].normal = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
+			vertices[index + 1].normal = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
+			vertices[index + 2].normal = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
+			vertices[index + 3].normal = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
+
+			vertices[index + 0].texCoord = glm::vec2(0.0f, 1.0f);
+			vertices[index + 1].texCoord = glm::vec2(1.0f, 1.0f);
+			vertices[index + 2].texCoord = glm::vec2(0.0f, 0.0f);
+			vertices[index + 3].texCoord = glm::vec2(1.0f, 0.0f);
+
+			indices.push_back(index + 0);
+			indices.push_back(index + 2);
+			indices.push_back(index + 1);
+			indices.push_back(index + 2);
+			indices.push_back(index + 3);
+			indices.push_back(index + 1);
+
+			index += 4;
+			// Back
+			vertices[index + 0].position = glm::vec4(-unit, unit, -unit, 1.0f);
+			vertices[index + 1].position = glm::vec4(unit, unit, -unit, 1.0f);
+			vertices[index + 2].position = glm::vec4(-unit, -unit, -unit, 1.0f);
+			vertices[index + 3].position = glm::vec4(unit, -unit, -unit, 1.0f);
+
+			vertices[index + 0].normal = glm::vec4(0.0f, 0.0f, -1.0f, 0.0f);
+			vertices[index + 1].normal = glm::vec4(0.0f, 0.0f, -1.0f, 0.0f);
+			vertices[index + 2].normal = glm::vec4(0.0f, 0.0f, -1.0f, 0.0f);
+			vertices[index + 3].normal = glm::vec4(0.0f, 0.0f, -1.0f, 0.0f);
+
+			vertices[index + 0].texCoord = glm::vec2(0.0f, 1.0f);
+			vertices[index + 1].texCoord = glm::vec2(1.0f, 1.0f);
+			vertices[index + 2].texCoord = glm::vec2(0.0f, 0.0f);
+			vertices[index + 3].texCoord = glm::vec2(1.0f, 0.0f);
+
+			indices.push_back(index + 0);
+			indices.push_back(index + 2);
+			indices.push_back(index + 1);
+			indices.push_back(index + 2);
+			indices.push_back(index + 3);
+			indices.push_back(index + 1);
+
+			index += 4;
+			// Left
+			vertices[index + 0].position = glm::vec4(-unit, unit, -unit, 1.0f);
+			vertices[index + 1].position = glm::vec4(-unit, unit, unit, 1.0f);
+			vertices[index + 2].position = glm::vec4(-unit, -unit, -unit, 1.0f);
+			vertices[index + 3].position = glm::vec4(-unit, -unit, unit, 1.0f);
+
+			vertices[index + 0].normal = glm::vec4(-1.0f, 0.0f, 0.0f, 0.0f);
+			vertices[index + 1].normal = glm::vec4(-1.0f, 0.0f, 0.0f, 0.0f);
+			vertices[index + 2].normal = glm::vec4(-1.0f, 0.0f, 0.0f, 0.0f);
+			vertices[index + 3].normal = glm::vec4(-1.0f, 0.0f, 0.0f, 0.0f);
+
+			vertices[index + 0].texCoord = glm::vec2(0.0f, 1.0f);
+			vertices[index + 1].texCoord = glm::vec2(1.0f, 1.0f);
+			vertices[index + 2].texCoord = glm::vec2(0.0f, 0.0f);
+			vertices[index + 3].texCoord = glm::vec2(1.0f, 0.0f);
+
+			indices.push_back(index + 0);
+			indices.push_back(index + 2);
+			indices.push_back(index + 1);
+			indices.push_back(index + 2);
+			indices.push_back(index + 3);
+			indices.push_back(index + 1);
+
+			index += 4;
+			// Right
+			vertices[index + 0].position = glm::vec4(unit, unit, -unit, 1.0f);
+			vertices[index + 1].position = glm::vec4(unit, unit, unit, 1.0f);
+			vertices[index + 2].position = glm::vec4(unit, -unit, -unit, 1.0f);
+			vertices[index + 3].position = glm::vec4(unit, -unit, unit, 1.0f);
+
+			vertices[index + 0].normal = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
+			vertices[index + 1].normal = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
+			vertices[index + 2].normal = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
+			vertices[index + 3].normal = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
+
+			vertices[index + 0].texCoord = glm::vec2(0.0f, 1.0f);
+			vertices[index + 1].texCoord = glm::vec2(1.0f, 1.0f);
+			vertices[index + 2].texCoord = glm::vec2(0.0f, 0.0f);
+			vertices[index + 3].texCoord = glm::vec2(1.0f, 0.0f);
+
+			indices.push_back(index + 0);
+			indices.push_back(index + 2);
+			indices.push_back(index + 1);
+			indices.push_back(index + 2);
+			indices.push_back(index + 3);
+			indices.push_back(index + 1);
+
+			index += 4;
+			// Top
+			vertices[index + 0].position = glm::vec4(-unit, unit, unit, 1.0f);
+			vertices[index + 1].position = glm::vec4(unit, unit, unit, 1.0f);
+			vertices[index + 2].position = glm::vec4(-unit, unit, -unit, 1.0f);
+			vertices[index + 3].position = glm::vec4(unit, unit, -unit, 1.0f);
+
+			vertices[index + 0].normal = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
+			vertices[index + 1].normal = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
+			vertices[index + 2].normal = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
+			vertices[index + 3].normal = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
+
+			vertices[index + 0].texCoord = glm::vec2(0.0f, 1.0f);
+			vertices[index + 1].texCoord = glm::vec2(1.0f, 1.0f);
+			vertices[index + 2].texCoord = glm::vec2(0.0f, 0.0f);
+			vertices[index + 3].texCoord = glm::vec2(1.0f, 0.0f);
+
+			indices.push_back(index + 0);
+			indices.push_back(index + 2);
+			indices.push_back(index + 1);
+			indices.push_back(index + 2);
+			indices.push_back(index + 3);
+			indices.push_back(index + 1);
+
+			index += 4;
+			// Bottom
+			vertices[index + 0].position = glm::vec4(-unit, -unit, unit, 1.0f);
+			vertices[index + 1].position = glm::vec4(unit, -unit, unit, 1.0f);
+			vertices[index + 2].position = glm::vec4(-unit, -unit, -unit, 1.0f);
+			vertices[index + 3].position = glm::vec4(unit, -unit, -unit, 1.0f);
+
+			vertices[index + 0].normal = glm::vec4(0.0f, -1.0f, 0.0f, 0.0f);
+			vertices[index + 1].normal = glm::vec4(0.0f, -1.0f, 0.0f, 0.0f);
+			vertices[index + 2].normal = glm::vec4(0.0f, -1.0f, 0.0f, 0.0f);
+			vertices[index + 3].normal = glm::vec4(0.0f, -1.0f, 0.0f, 0.0f);
+
+			vertices[index + 0].texCoord = glm::vec2(0.0f, 1.0f);
+			vertices[index + 1].texCoord = glm::vec2(1.0f, 1.0f);
+			vertices[index + 2].texCoord = glm::vec2(0.0f, 0.0f);
+			vertices[index + 3].texCoord = glm::vec2(1.0f, 0.0f);
+
+			indices.push_back(index + 0);
+			indices.push_back(index + 2);
+			indices.push_back(index + 1);
+			indices.push_back(index + 2);
+			indices.push_back(index + 3);
+			indices.push_back(index + 1);
+
+			index += 4;
+
+		} break;
+		case PRIMITIVE_PYRAMID:
+		{
+			vertexCount = 16; // 3 for 4 tris and 1 for bottom quad.
+			vertices = new Vertex[vertexCount];
+
+			unsigned int index = 0;
+			// Bottom
+			vertices[index + 0].position = glm::vec4(-unit, -unit, unit, 1.0f);
+			vertices[index + 1].position = glm::vec4(unit, -unit, unit, 1.0f);
+			vertices[index + 2].position = glm::vec4(-unit, -unit, -unit, 1.0f);
+			vertices[index + 3].position = glm::vec4(unit, -unit, -unit, 1.0f);
+
+			vertices[index + 0].normal = glm::vec4(0.0f, -1.0f, 0.0f, 0.0f);
+			vertices[index + 1].normal = glm::vec4(0.0f, -1.0f, 0.0f, 0.0f);
+			vertices[index + 2].normal = glm::vec4(0.0f, -1.0f, 0.0f, 0.0f);
+			vertices[index + 3].normal = glm::vec4(0.0f, -1.0f, 0.0f, 0.0f);
+
+			vertices[index + 0].texCoord = glm::vec2(0.0f, 1.0f);
+			vertices[index + 1].texCoord = glm::vec2(1.0f, 1.0f);
+			vertices[index + 2].texCoord = glm::vec2(0.0f, 0.0f);
+			vertices[index + 3].texCoord = glm::vec2(1.0f, 0.0f);
+
+			indices.push_back(index + 0);
+			indices.push_back(index + 2);
+			indices.push_back(index + 1);
+			indices.push_back(index + 2);
+			indices.push_back(index + 3);
+			indices.push_back(index + 1);
+
+			index += 4;
+			// Front
+			vertices[index + 0].position = glm::vec4(-unit, -unit, unit, 1.0f);
+			vertices[index + 1].position = glm::vec4(0.0f, unit, 0.0f, 1.0f);
+			vertices[index + 2].position = glm::vec4(unit, -unit, unit, 1.0f);
+
+			vertices[index + 0].normal = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
+			vertices[index + 1].normal = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
+			vertices[index + 2].normal = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
+
+			vertices[index + 0].texCoord = glm::vec2(0.0f, 0.0f);
+			vertices[index + 1].texCoord = glm::vec2(0.5f, 1.0f);
+			vertices[index + 2].texCoord = glm::vec2(1.0f, 0.0f);
+
+			indices.push_back(index + 0);
+			indices.push_back(index + 2);
+			indices.push_back(index + 1);
+
+			index += 3;
+			// Back
+			vertices[index + 0].position = glm::vec4(-unit, -unit, -unit, 1.0f);
+			vertices[index + 1].position = glm::vec4(0.0f, unit, 0.0f, 1.0f);
+			vertices[index + 2].position = glm::vec4(unit, -unit, -unit, 1.0f);
+
+			vertices[index + 0].normal = glm::vec4(0.0f, 0.0f, -1.0f, 0.0f);
+			vertices[index + 1].normal = glm::vec4(0.0f, 0.0f, -1.0f, 0.0f);
+			vertices[index + 2].normal = glm::vec4(0.0f, 0.0f, -1.0f, 0.0f);
+
+			vertices[index + 0].texCoord = glm::vec2(0.0f, 0.0f);
+			vertices[index + 1].texCoord = glm::vec2(0.5f, 1.0f);
+			vertices[index + 2].texCoord = glm::vec2(1.0f, 0.0f);
+
+			indices.push_back(index + 0);
+			indices.push_back(index + 2);
+			indices.push_back(index + 1);
+
+			index += 3;
+			// Left
+			vertices[index + 0].position = glm::vec4(-unit, -unit, -unit, 1.0f);
+			vertices[index + 1].position = glm::vec4(0.0f, unit, 0.0f, 1.0f);
+			vertices[index + 2].position = glm::vec4(-unit, -unit, unit, 1.0f);
+
+			vertices[index + 0].normal = glm::vec4(-1.0f, 0.0f, 0.0f, 0.0f);
+			vertices[index + 1].normal = glm::vec4(-1.0f, 0.0f, 0.0f, 0.0f);
+			vertices[index + 2].normal = glm::vec4(-1.0f, 0.0f, 0.0f, 0.0f);
+
+			vertices[index + 0].texCoord = glm::vec2(0.0f, 0.0f);
+			vertices[index + 1].texCoord = glm::vec2(0.5f, 1.0f);
+			vertices[index + 2].texCoord = glm::vec2(1.0f, 0.0f);
+
+			indices.push_back(index + 0);
+			indices.push_back(index + 2);
+			indices.push_back(index + 1);
+
+			index += 3;
+			// Right
+			vertices[index + 0].position = glm::vec4(unit, -unit, -unit, 1.0f);
+			vertices[index + 1].position = glm::vec4(0.0f, unit, 0.0f, 1.0f);
+			vertices[index + 2].position = glm::vec4(unit, -unit, unit, 1.0f);
+
+			vertices[index + 0].normal = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
+			vertices[index + 1].normal = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
+			vertices[index + 2].normal = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
+
+			vertices[index + 0].texCoord = glm::vec2(0.0f, 0.0f);
+			vertices[index + 1].texCoord = glm::vec2(0.5f, 1.0f);
+			vertices[index + 2].texCoord = glm::vec2(1.0f, 0.0f);
+
+			indices.push_back(index + 0);
+			indices.push_back(index + 2);
+			indices.push_back(index + 1);
+
+			index += 3;
+		} break;
+		case PRIMITIVE_CONE:
+		{
+			// TODO: fix cone generation.
+			const int sectorCount = 12;
+
+			vertexCount = (sectorCount + 4) * 2 + 1; // probably incorrect atm.
+			vertices = new Vertex[vertexCount];
+
+			std::vector<float> tempVertices;
+			constexpr float pi = glm::pi<float>();
+			float sectorStep = 2 * pi / sectorCount;
+			float sectorAngle = 0.0f;
+			float height = unit;
+
+			for (int i = 0; i <= sectorCount; ++i) // calculate temp unit circles
+			{
+				sectorAngle = i * sectorStep;
+				tempVertices.push_back(glm::cos(sectorAngle));
+				tempVertices.push_back(0.0f);
+				tempVertices.push_back(glm::sin(sectorAngle));
+			}
+
+			// vertices
+			unsigned int index = 0;
+			// sides
+			for (int j = 0, k = 0; j <= sectorCount; j += 2) // probably a better way of doing this.
+			{
+				float ux = tempVertices[k];
+				float uy = tempVertices[k + 1];
+				float uz = tempVertices[k + 2];
+
+				float u = (float)j / sectorCount; // the u from uv
+				float v = 1.0f; // the v from uv
+
+				vertices[index].position = glm::vec4(0.0f, height, 0.0f, 1.0f);
+				vertices[index].normal = glm::vec4(ux, uy, uz, 0.0f);
+				vertices[index].texCoord = glm::vec2(u, v);
+				index++;
+
+				v = 0.0f;
+				vertices[index].position = glm::vec4(ux * unit, -height, uz * unit, 1.0f);
+				vertices[index].normal = glm::vec4(ux, uy, uz, 0.0f);
+				vertices[index].texCoord = glm::vec2(u, v);
+				index++;
+
+				k += 3;
+				if (k >= sectorCount * 3) break;
+
+				ux = tempVertices[k];
+				uy = tempVertices[k + 1];
+				uz = tempVertices[k + 2];
+
+				vertices[index].position = glm::vec4(ux * unit, -height, uz * unit, 1.0f);
+				vertices[index].normal = glm::vec4(ux, uy, uz, 0.0f);
+				vertices[index].texCoord = glm::vec2(u, v);
+
+				index++;
+				k += 3;
+			}
+
+			unsigned int baseCenterIndex = index;
+			// bottom
+			vertices[index].position = glm::vec4(0.0f, -height, 0.0f, 1.0f);
+			vertices[index].normal = glm::vec4(0.0f, -1.0f, 0.0f, 0.0f);
+			vertices[index].texCoord = glm::vec2(0.5f, 0.5f);
+			index++;
+
+			for (int j = 0, k = 0; j < sectorCount; ++j, index++, k += 3)
+			{
+				float ux = tempVertices[k];
+				float uz = tempVertices[k + 2];
+				vertices[index].position = glm::vec4(ux * unit, -height, uz * unit, 1.0f);
+				vertices[index].normal = glm::vec4(0.0f, -1.0f, 0.0f, 0.0f);
+				vertices[index].texCoord = glm::vec2(-ux * 0.5f + 0.5f, -uz * 0.5f + 0.5f);
+			}
+
+			unsigned int k = 0;
+			// sides
+			for (int i = 0; i < sectorCount + 6; ++i, ++k) // probably a better way of doing this. sectorCount + 6 ????
+			{
+				indices.push_back(k);
+				indices.push_back(k + 1);
+				indices.push_back(k + 2);
+			}
+
+			k = baseCenterIndex + 1;
+			// bottom
+			for (int i = 0; i < sectorCount; ++i, ++k)
+			{
+				if (i < sectorCount - 1)
+				{
+					indices.push_back(baseCenterIndex);
+					indices.push_back(k + 1);
+					indices.push_back(k);
+				}
+				else
+				{
+					indices.push_back(baseCenterIndex);
+					indices.push_back(baseCenterIndex + 1);
+					indices.push_back(k);
+				}
+			}
+		} break;
+		case PRIMITIVE_CYLINDER:
+		{
+			// TODO: fix cylinder generation.
+			const int sectorCount = 12;
+
+			vertexCount = (sectorCount * 2 + 2) * 2; // algorithm uses a higher vertex count than it should, not sure why. might be accounting for normals?
+			vertices = new Vertex[vertexCount];
+
+			std::vector<float> tempVertices;
+			constexpr float pi = glm::pi<float>();
+			float sectorStep = 2 * pi / sectorCount;
+			float sectorAngle = 0.0f;
+			float height = unit * 2;
+
+			for (int i = 0; i <= sectorCount; ++i) // calculate temp unit circles
+			{
+				sectorAngle = i * sectorStep;
+				tempVertices.push_back(glm::cos(sectorAngle));
+				tempVertices.push_back(0.0f);
+				tempVertices.push_back(glm::sin(sectorAngle));
+			}
+
+			// vertices
+			unsigned int index = 0;
+			// sides
+			for (int i = 0; i < 2; ++i)
+			{
+				float h = -height / 2.0f + i * height;
+				float v = 1.0f - i; // the v from uv
+
+				for (int j = 0, k = 0; j <= sectorCount; ++j, index++, k += 3)
+				{
+					float ux = tempVertices[k];
+					float uy = tempVertices[k+1];
+					float uz = tempVertices[k+2];
+
+					float u = (float)j / sectorCount; // the u from uv
+
+					vertices[index].position = glm::vec4(ux * unit, h, uz * unit, 1.0f);
+					vertices[index].normal = glm::vec4(ux, uy, uz, 0.0f);
+					vertices[index].texCoord = glm::vec2(u, v);
+				}
+			}
+
+			unsigned int baseCenterIndex = index;
+			unsigned int topCenterIndex = baseCenterIndex + sectorCount + 1;
+			// top and bottom
+			for (int i = 0; i < 2; ++i)
+			{
+				float h = -height / 2.0f + i * height;
+				float ny = (float)(-1 + i * 2);
+
+				vertices[index].position = glm::vec4(0.0f, h, 0.0f, 1.0f);
+				vertices[index].normal = glm::vec4(0.0f, ny, 0.0f, 0.0f);
+				vertices[index].texCoord = glm::vec2(0.5f, 0.5f);
+				index++;
+
+				for (int j = 0, k = 0; j < sectorCount; ++j, index++, k += 3)
+				{
+					float ux = tempVertices[k];
+					float uz = tempVertices[k+2];
+					vertices[index].position = glm::vec4(ux * unit, h, uz * unit, 1.0f);
+					vertices[index].normal = glm::vec4(0.0f, ny, 0.0f, 0.0f);
+					vertices[index].texCoord = glm::vec2(-ux * 0.5f + 0.5f, -uz * 0.5f + 0.5f);
+				}
+			}
+
+			// indices
+			unsigned int k1 = 0, k2 = sectorCount + 1;
+			// sides
+			for (int i = 0; i < sectorCount; ++i, ++k1, ++k2)
+			{
+				indices.push_back(k1);
+				indices.push_back(k1 + 1);
+				indices.push_back(k2);
+
+				indices.push_back(k2);
+				indices.push_back(k1 + 1);
+				indices.push_back(k2 + 1);
+			}
+
+			unsigned int k = baseCenterIndex + 1;
+			// bottom
+			for (int i = 0; i < sectorCount; ++i, ++k)
+			{
+				if (i < sectorCount - 1)
+				{
+					indices.push_back(baseCenterIndex);
+					indices.push_back(k + 1);
+					indices.push_back(k);
+				}
+				else
+				{
+					indices.push_back(baseCenterIndex);
+					indices.push_back(baseCenterIndex + 1);
+					indices.push_back(k);
+				}
+			}
+
+			k = topCenterIndex + 1;
+			// top
+			for (int i = 0; i < sectorCount; ++i, ++k)
+			{
+				if (i < sectorCount - 1)
+				{
+					indices.push_back(topCenterIndex);
+					indices.push_back(k);
+					indices.push_back(k + 1);
+				}
+				else
+				{
+					indices.push_back(topCenterIndex);
+					indices.push_back(k);
+					indices.push_back(topCenterIndex + 1);
+				}
+			}
+		} break;
+		case PRIMITIVE_SPHERE:
+		{
+			// TODO: fix sphere generation.
+			const unsigned int sectorCount = 12;
+			const unsigned int stackCount = 6;
+
+			vertexCount = (sectorCount+1) * (stackCount+1); // the proper vertex count should be 62 according to blender's sphere primitive but this algorithm creates 91, not sure why
+			vertices = new Vertex[vertexCount];
+
+			float x, y, z, xz;
+			float nx, ny, nz;
+			float u, v;
+
+			constexpr float pi = glm::pi<float>();
+			float sectorStep = 2 * pi / sectorCount;
+			float stackStep = pi / stackCount;
+			float sectorAngle = 0.0f, stackAngle = 0.0f;
+			float invRadius = 1.0f / unit;
+
+			// vertices
+			unsigned int index = 0;
+			for (int i = 0; i <= stackCount; ++i)
+			{
+				stackAngle = pi / 2 - i * stackStep;
+				xz = unit * glm::cos(stackAngle);
+				y = unit * glm::sin(stackAngle);
+
+				for (int j = 0; j <= sectorCount; ++j, ++index)
+				{
+					sectorAngle = j * sectorStep;
+					x = xz * glm::cos(sectorAngle);
+					z = xz * glm::sin(sectorAngle);
+
+					vertices[index].position = glm::vec4(x, y, z, 1.0f);
+
+					nx = x * invRadius;
+					ny = y * invRadius;
+					nz = z * invRadius;
+					vertices[index].normal = glm::vec4(nx, ny, nz, 0.0f);
+
+					u = (float)j / sectorCount;
+					v = (float)i / stackCount;
+					vertices[index].texCoord = glm::vec2(u, v);
+				}
+			}
+
+			// indices
+			unsigned int k1 = 0, k2 = 0;
+			for (int i = 0; i < stackCount; ++i)
+			{
+				k1 = i * (sectorCount + 1);
+				k2 = k1 + sectorCount + 1;
+
+				for (int j = 0; j < sectorCount; ++j, ++k1, ++k2)
+				{
+					if (i != 0)
+					{
+						indices.push_back(k1);
+						indices.push_back(k2);
+						indices.push_back(k1 + 1);
+					}
+					if (i != (stackCount - 1))
+					{
+						indices.push_back(k1 + 1);
+						indices.push_back(k2);
+						indices.push_back(k2 + 1);
+					}
+				}
+			}
+		} break;
+	}
+	CalculateTangents(vertices, vertexCount, indices);
+	Initialize(vertexCount, vertices, (unsigned int)indices.size(), indices.data());
+
+	delete[] vertices;
 }
 
 void Mesh::Draw()

@@ -1,6 +1,6 @@
 #version 430 core
 
-// Basic lit shader.
+// Lit PBR shader.
 
 layout (location = 0) in vec4 aPos;
 layout (location = 1) in vec4 aNormal;

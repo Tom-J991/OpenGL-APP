@@ -14,7 +14,7 @@ public:
 	void ClearScreen();
 	void UpdateWindow();
 
-	static Application *Instance() { return s_instance; } // Singleton.
+	static Application *GetInstance() { return s_instance; } // Singleton.
 
 	const char *GetWindowTitle() const { return m_windowTitle; }
 	unsigned int GetWindowWidth() const { return m_windowWidth; }
@@ -41,6 +41,7 @@ protected:
 	virtual bool Shutdown() = 0;
 	virtual bool Update(float dt) = 0;
 	virtual bool Draw() = 0;
+	virtual bool LateUpdate(float dt) = 0;
 
 protected:
 	static Application *s_instance;

@@ -1,6 +1,6 @@
 #version 430 core
 
-// Basic lit shader.
+// Lit PBR shader.
 
 #define MAX_LIGHTS 4
 
@@ -67,17 +67,55 @@ layout (std430, binding = 1) readonly buffer SpotLightSBO
 	SpotLight spotLights[];
 };
 
+// Constants
+const float roughness = 0.5f; // Should probably be a parameter or uniform.
+const float reflectionCoefficient = 1.4f; // Should also probably be a parameter or uniform.
+
 vec3 GetDiffuse(vec3 direction, vec3 color, vec3 normal, vec3 view)
 {
-	return color * max(0, dot(normal, -direction)); // Basic phong-lambert diffuse calculation.
+	// Oren-Nayar diffuse calculation.
+	float NdL = max(0.0f, dot(normal, direction));
+	float NdE = max(0.0f, dot(normal, view));
+
+	float R2 = roughness * roughness;
+
+	float A = 1.0f - 0.5f * R2 / (R2 + 0.33f);
+	float B = 0.45f * R2 / (R2 + 0.09f);
+
+	vec3 lightProjected = normalize(direction - normal * NdL);
+	vec3 viewProjected = normalize(view - normal * NdE);
+	float CX = max(0.0f, dot(lightProjected, viewProjected));
+
+	float alpha = sin(max(acos(NdE), acos(NdL)));
+	float beta = tan(min(acos(NdE), acos(NdL)));
+	float DX = alpha * beta;
+
+	return color * (NdL * (A + B * CX * DX));
 }
 
 vec3 GetSpecular(vec3 direction, vec3 color, vec3 normal, vec3 view)
 {
-	// Phong-specular calculation.
-	vec3 R = reflect(direction, normal);
-	float specularTerm = pow(max(0, dot(R, view)), specular);
-	return specularTerm * color;
+	// Cook-Torrance specular calculation.
+	float NdL = max(0.0f, dot(normal, direction));
+	float NdE = max(0.0f, dot(normal, view));
+
+	vec3 H = (direction + view) / 2;
+
+	float NdH = max(0.0f, dot(normal, H));
+	float NdH2 = NdH * NdH;
+	float e = 2.71828182845904523536028747135f;
+
+	float R2 = roughness * roughness;
+
+	float exponent = -(1 - NdH2) / (NdH2 * R2);
+	float D = pow(e, exponent) / (R2 * NdH2 * NdH2);
+
+	float F = reflectionCoefficient + (1 - reflectionCoefficient) * pow(1 - NdE, 5);
+
+	float X = 2.0f * NdH / dot(view, H);
+	float G = min(1.0f, min(X * NdL, X * NdE));
+
+	return color * (max((D*G*F) / (NdE * pi), 0.0f));
 }
 
 void main()
@@ -115,8 +153,8 @@ void main()
 		vec3 color = pointLights[i].color.xyz / (distance * distance); // Apply attenuation.
 		color *= pointLights[i].intensity; // Apply light intensity.
 
-		diffuseTotal += GetDiffuse(-direction, color, N, V);
-		specularTotal += GetSpecular(-direction, color, N, V);
+		diffuseTotal += GetDiffuse(direction, color, N, V);
+		specularTotal += GetSpecular(direction, color, N, V);
 	}
 
 	// Shade for spotlights.
@@ -136,8 +174,8 @@ void main()
 		color *= spotLights[j].intensity;// Apply light intensity.
 		color *= intensity; // Apply spotlight cone.
 
-		diffuseTotal += GetDiffuse(-direction, color, N, V);
-		specularTotal += GetSpecular(-direction, color, N, V);
+		diffuseTotal += GetDiffuse(direction, color, N, V);
+		specularTotal += GetSpecular(direction, color, N, V);
 	}
 
 	// Apply shading, textures, and material properties.

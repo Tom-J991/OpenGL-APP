@@ -82,6 +82,9 @@ bool Application::Run() // Basically does everything.
 		// Call application draw.
 		if (!Draw()) { std::cout << "Error occured in application draw!" << std::endl; return false; }
 
+		// Call application late update.
+		if (!LateUpdate(deltaTime)) { std::cout << "Error occured in application late update!" << std::endl; return false; }
+
 		UpdateWindow(); // Update the window.
 		m_isRunning = !glfwWindowShouldClose(s_glfwStuff.window); // Check if application should keep updating.
 	}
@@ -119,8 +122,8 @@ void *Application::GetRawWindowHandle()
 void WindowResizeCallback(GLFWwindow *window, int width, int height)
 {
 	// Set new window size and update viewport.
-	Application::Instance()->SetWindowWidth(width);
-	Application::Instance()->SetWindowHeight(height);
+	Application::GetInstance()->SetWindowWidth(width);
+	Application::GetInstance()->SetWindowHeight(height);
 	glViewport(0, 0, width, height);
 }
 
@@ -128,5 +131,5 @@ void MousePositionCallback(GLFWwindow *window, double x, double y)
 {
 	// Gets the mouse position.
 	glm::vec2 position = glm::vec2((float)x, (float)y);
-	Application::Instance()->SetMousePosition(position);
+	Application::GetInstance()->SetMousePosition(position);
 }

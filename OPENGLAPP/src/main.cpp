@@ -19,6 +19,12 @@ using aie::Gizmos;
 #include "Scene.h"
 #include "Camera.h"
 #include "Light.h"
+#include "ParticleSystem.h"
+
+// TODO: Solar system could be it's own class, takes up a lot of space. Whole file could generally be a lot cleaner.
+
+// TODO: Shadow rendering.
+// TODO: Deferred rendering, maybe?
 
 class MyApp : public Application // Implement interface;
 {
@@ -68,8 +74,8 @@ protected:
 			return false;
 		}
 
-		m_shader.loadShader(aie::eShaderStage::VERTEX, "./res/shaders/simple.vert");
-		m_shader.loadShader(aie::eShaderStage::FRAGMENT, "./res/shaders/simple.frag");
+		m_shader.loadShader(aie::eShaderStage::VERTEX, "./res/shaders/pbr.vert");
+		m_shader.loadShader(aie::eShaderStage::FRAGMENT, "./res/shaders/pbr.frag");
 		if (m_shader.link() == false)
 		{
 			std::cout << "Error whilst linking shader program: " << m_shader.getLastError() << std::endl;
@@ -84,18 +90,29 @@ protected:
 			return false;
 		}
 
+		m_particleShader.loadShader(aie::eShaderStage::VERTEX, "./res/shaders/particle.vert");
+		m_particleShader.loadShader(aie::eShaderStage::FRAGMENT, "./res/shaders/particle.frag");
+		if (m_particleShader.link() == false)
+		{
+			std::cout << "Error whilst linking shader program: " << m_particleShader.getLastError() << std::endl;
+			return false;
+		}
+
 		// Create and initialize render objects.
 		m_fullscreenMesh.InitializeFullscreenQuad(); // For post processing, unused.
 
 		m_quadMesh.InitializeQuad();
 		m_quadTransform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 5.0f, 10.0f)) * 
-			glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), glm::vec3(0, 1, 0)) *
-			glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(-1, 0, 0)) * 
+			glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1, 0, 0)) * 
 			glm::scale(glm::mat4(1.0f), { 10.0f, 10.0f, 10.0f });
 
 		m_spearMesh.InitializeFromFile("./res/models/soulspear/soulspear.obj");
 		m_spearMesh.LoadMaterial("./res/models/soulspear/soulspear.mtl");
 		m_spearTransform = glm::translate(glm::mat4(1.0f), { 0.0f, 1.0f, 0.0f }) * glm::scale(glm::mat4(1.0f), { 1.0f, 1.0f, 1.0f });
+
+		m_emitter = new ParticleEmitter();
+		m_emitter->Initialise(1000, 500, 0.1f, 1.0f, 1.0f, 5.0f, 1.0f, 0.1f, glm::vec4(1, 0, 0, 1), glm::vec4(1, 1, 0, 1));
+		m_emitterTransform = glm::translate(glm::mat4(1.0f), { 5.0f, 1.0f, 5.0f });
 
 		// Setup scene.
 		m_sunLight.direction = { -0.5f, 0.5f, -1.0f, 1.0f };
@@ -104,8 +121,10 @@ protected:
 
 		for (int i = -4; i <= 4; i++)
 		{
-			m_scene->AddInstance(new ::Instance(glm::translate(glm::mat4(1.0f), { i * 2.5f, 0.0f, 0.0f }), &m_spearMesh, &m_shader));
+			m_scene->AddInstance(new Instance(glm::translate(glm::mat4(1.0f), { i * 2.5f, 0.0f, 0.0f }), &m_spearMesh, &m_shader));
 		}
+
+		m_scene->AddInstance(new Instance(glm::translate(glm::mat4(1.0f), { -5.0f, 1.0f, -3.0f }), &m_primitiveMesh, &m_shader));
 
 		m_scene->AddPointLight(PointLight(glm::vec3(6.0f, 3.0f, -3.0f), glm::vec3(1, 0, 0), 50));
 		m_scene->AddPointLight(PointLight(glm::vec3(-6.0f, 3.0f, -3.0f), glm::vec3(0, 1, 0), 50));
@@ -114,10 +133,28 @@ protected:
 		m_rtCamera.SetPosition({ 5.5f, 4.0f, -10.0f });
 		m_rtCamera.SetRotation({ -180.0f, -75.0f });
 
+		// Init animation.
+		m_hipFrames[0].position = glm::vec3(0, 5, 0);
+		m_hipFrames[0].rotation = glm::quat(glm::vec3(1, 0, 0));
+		m_hipFrames[1].position = glm::vec3(0, 5, 0);
+		m_hipFrames[1].rotation = glm::quat(glm::vec3(-1, 0, 0));
+
+		m_kneeFrames[0].position = glm::vec3(0, -2.5f, 0);
+		m_kneeFrames[0].rotation = glm::quat(glm::vec3(1, 0, 0));
+		m_kneeFrames[1].position = glm::vec3(0, -2.5f, 0);
+		m_kneeFrames[1].rotation = glm::quat(glm::vec3(0, 0, 0));
+
+		m_ankleFrames[0].position = glm::vec3(0, -2.5f, 0);
+		m_ankleFrames[0].rotation = glm::quat(glm::vec3(-1, 0, 0));
+		m_ankleFrames[1].position = glm::vec3(0, -2.5f, 0);
+		m_ankleFrames[1].rotation = glm::quat(glm::vec3(0, 0, 0));
+
 		return true;
 	}
+
 	virtual bool Shutdown() override
 	{
+		delete m_emitter; m_emitter = nullptr;
 		delete m_scene; m_scene = nullptr;
 
 		aie::ImGui_Shutdown();
@@ -126,10 +163,11 @@ protected:
 
 		return true;
 	}
+
 	virtual bool Update(float dt) override
 	{
-		GLFWwindow *window = (GLFWwindow*)GetRawWindowHandle();
-		
+		GLFWwindow *window = (GLFWwindow *)GetRawWindowHandle();
+
 		aie::ImGui_NewFrame();
 
 		float time = (float)glfwGetTime();
@@ -137,8 +175,34 @@ protected:
 
 		m_camera.DoFlyCam(dt);
 
-		// ImGui settings window.
+		// Do animation.
+		float s = glm::cos((float)glfwGetTime()) * 0.5f + 0.5f;
+		const glm::mat4 animationParent = glm::translate(glm::mat4(1.0f), glm::vec3(10.0f, 0.0f, 0.0f));
+		{
+			glm::vec3 p = (1.0f - s) * m_hipFrames[0].position + s * m_hipFrames[1].position;
+			glm::quat r = glm::slerp(m_hipFrames[0].rotation, m_hipFrames[1].rotation, s);
+			m_hipBone = animationParent * glm::translate(p) * glm::toMat4(r);
+		}
+		{
+			glm::vec3 p = (1.0f - s) * m_kneeFrames[0].position + s * m_kneeFrames[1].position;
+			glm::quat r = glm::slerp(m_kneeFrames[0].rotation, m_kneeFrames[1].rotation, s);
+			m_kneeBone = m_hipBone * glm::translate(p) * glm::toMat4(r);
+		}
+		{
+			glm::vec3 p = (1.0f - s) * m_ankleFrames[0].position + s * m_ankleFrames[1].position;
+			glm::quat r = glm::slerp(m_ankleFrames[0].rotation, m_ankleFrames[1].rotation, s);
+			m_ankleBone = m_kneeBone * glm::translate(p) * glm::toMat4(r);
+		}
+
+		m_emitter->Update(dt, m_camera.GetViewMatrixFromQuaternion());
+
+		m_scene->Update(dt);
+			
+		#pragma region IMGUI_WINDOWS
+		// ImGui light settings window.
 		ImGui::Begin("Light Settings");
+
+		ImGui::Checkbox("Toggle Debug Render", &m_debugRender);
 
 		glm::vec3 &ambientLight = m_scene->GetAmbientLight();
 		ImGui::DragFloat3("Ambient Light Colour", &ambientLight[0], 0.1f);
@@ -146,11 +210,44 @@ protected:
 		ImGui::DragFloat3("Sunlight Direction", &m_sunLight.direction[0], 0.1f, -1.0f, 1.0f);
 		ImGui::DragFloat3("Sunlight Colour", &m_sunLight.color[0], 0.1f);
 
-		ImGui::Checkbox("Toggle Debug Render", &m_debugRender);
+		if (ImGui::Button("Add Light"))
+			ImGui::OpenPopup("Light_Add");
+
+		if (ImGui::BeginPopup("Light_Add"))
+		{
+			static int e = 0;
+			ImGui::RadioButton("Point Light", &e, 0);
+			ImGui::RadioButton("Spot Light", &e, 1);
+
+			if (ImGui::Button("Add"))
+			{
+				switch (e)
+				{
+					case 0: // Point Lights
+					{
+						m_scene->AddPointLight(PointLight(glm::vec3(0), glm::vec3(1), 10.0f));
+					} break;
+					case 1: // Spotlights
+					{
+						m_scene->AddSpotLight(SpotLight(glm::vec3(0), glm::vec3(0, 0, 1), glm::vec3(1), 0.97f, 0.95f, 32.0f));
+					} break;
+					default: break;
+				}
+				e = 0;
+				ImGui::CloseCurrentPopup();
+			}
+
+			if (ImGui::Button("Cancel"))
+				ImGui::CloseCurrentPopup();
+
+			ImGui::EndPopup();
+		}
 
 		if (ImGui::CollapsingHeader("Lights in Scene"))
 		{
-			for (int i = 0; i < m_scene->GetNumPointLights(); i++)
+			ImGui::Separator();
+			ImGui::Indent();
+			for (int i = 0; i < m_scene->GetPointLights()->size(); i++)
 			{
 				PointLight &light = m_scene->GetPointLights()->data()[i];
 
@@ -158,14 +255,20 @@ protected:
 				ImGui::PushID(headerText.c_str());
 				if (ImGui::CollapsingHeader(headerText.c_str()))
 				{
+					ImGui::Indent();
 					ImGui::DragFloat3("Position", &light.position[0], 0.1f);
 					ImGui::DragFloat("Intensity", &light.intensity, 0.1f);
 					ImGui::ColorEdit4("Colour", &light.color[0], false);
+					if (ImGui::Button("Delete Light"))
+					{
+						m_scene->RemovePointLight(&light);
+					}
+					ImGui::Unindent();
 				}
 				ImGui::PopID();
 			}
 
-			for (int i = 0; i < m_scene->GetNumSpotLights(); i++)
+			for (int i = 0; i < m_scene->GetSpotLights()->size(); i++)
 			{
 				SpotLight &light = m_scene->GetSpotLights()->data()[i];
 
@@ -173,18 +276,114 @@ protected:
 				ImGui::PushID(headerText.c_str());
 				if (ImGui::CollapsingHeader(headerText.c_str()))
 				{
+					ImGui::Indent();
 					ImGui::DragFloat3("Position", &light.position[0], 0.1f);
 					ImGui::DragFloat3("Direction", &light.direction[0], 0.01f);
 					ImGui::DragFloat("Intensity", &light.intensity, 0.1f);
 					ImGui::ColorEdit4("Colour", &light.color[0], false);
 					ImGui::DragFloat("Inner Cutoff", &light.innerCutoff, 0.01f);
 					ImGui::DragFloat("Outer Cutoff", &light.outerCutoff, 0.01f);
+					if (ImGui::Button("Delete Light"))
+					{
+						m_scene->RemoveSpotLight(&light);
+					}
+					ImGui::Unindent();
 				}
 				ImGui::PopID();
 			}
+			ImGui::Unindent();
 		}
 
 		ImGui::End();
+
+		// ImGui instances Window
+		ImGui::Begin("Instances");
+
+		if (ImGui::Button("Add Primitive"))
+			ImGui::OpenPopup("Primitive_Add");
+
+		if (ImGui::BeginPopup("Primitive_Add"))
+		{
+			static int e = 0;
+			ImGui::RadioButton("Triangle", &e, 0);
+			ImGui::RadioButton("Quad", &e, 1);
+			ImGui::RadioButton("Cube", &e, 2);
+			ImGui::RadioButton("Pyramid", &e, 3);
+			ImGui::RadioButton("Cone", &e, 4);
+			ImGui::RadioButton("Cylinder", &e, 5);
+			ImGui::RadioButton("Sphere", &e, 6);
+
+			if (ImGui::Button("Add"))
+			{
+				Mesh::PrimitiveID selectedType = (Mesh::PrimitiveID)e;
+				// TODO: need to eventually delete this mesh along with the instance, 
+				// can't use a stack allocated mesh since it pretty much immediately goes out of scope and gets deleted causing a crash.
+				// could also have preallocated meshes that these reuse.
+				Mesh *mesh = new Mesh();
+				mesh->InitializePrimitive(selectedType);
+				mesh->LoadMaterial("./res/models/stanford/Dragon.mtl");
+				m_scene->AddInstance(new Instance(glm::mat4(1.0f), mesh, &m_textureShader));
+
+				e = 0;
+				ImGui::CloseCurrentPopup();
+			}
+			
+			if (ImGui::Button("Cancel"))
+				ImGui::CloseCurrentPopup();
+
+			ImGui::EndPopup();
+		}
+
+		if (ImGui::CollapsingHeader("Instances in Scene"))
+		{
+			ImGui::Separator();
+			ImGui::Indent();
+			for (int i = 0; i < m_scene->GetNumInstances(); i++)
+			{
+				Instance *instance = m_scene->GetInstances()->data()[i];
+
+				std::string headerText = ("Instance " + std::to_string(i) + ":");
+				ImGui::PushID(headerText.c_str());
+				if (ImGui::CollapsingHeader(headerText.c_str()))
+				{
+					glm::vec3 &position = instance->GetPosition();
+					glm::vec3 &rotation = instance->GetRotation();
+					glm::vec3 &scale = instance->GetScale();
+
+					ImGui::Indent();
+					ImGui::DragFloat3("Position", &position[0], 0.1f);
+					ImGui::DragFloat3("Rotation", &rotation[0], 0.1f);
+					ImGui::DragFloat3("Scale", &scale[0], 0.1f);
+					if (ImGui::Button("Delete Instance"))
+					{
+						m_scene->RemoveInstance(instance);
+					}
+					ImGui::Unindent();
+				}
+				ImGui::PopID();
+			}
+			{
+				std::string headerText = ("RT Camera:");
+				ImGui::PushID(headerText.c_str());
+				if (ImGui::CollapsingHeader(headerText.c_str()))
+				{
+					glm::vec3 &position = m_rtCamera.GetPosition();
+					float &theta = m_rtCamera.GetTheta();
+					float &phi = m_rtCamera.GetPhi();
+
+					ImGui::Indent();
+					ImGui::DragFloat3("Position", &position[0], 0.1f);
+					ImGui::DragFloat("Pitch", &phi, 0.1f);
+					ImGui::DragFloat("Yaw", &theta, 0.1f); 
+					ImGui::Unindent();
+				}
+				ImGui::PopID();
+			}
+			ImGui::Unindent();
+		}
+
+		ImGui::End();
+		#pragma endregion
 
 		// Quit.
 		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
@@ -195,6 +394,14 @@ protected:
 
 		return true;
 	}
+
+	virtual bool LateUpdate(float dt) override
+	{
+		m_scene->LateUpdate(dt);
+
+		return true;
+	}
+
 	virtual bool Draw() override
 	{
 		float time = (float)glfwGetTime();
@@ -205,7 +412,16 @@ protected:
 			m_scene->SetCamera(&m_rtCamera);
 			SetBackgroundColor({ 0.25f, 0.05f, 0.15f, 1.0f });
 			ClearScreen();
+
 			m_scene->Draw();
+
+			// Draw Particle Emitter.
+			glm::mat4 pv = (m_rtCamera.GetProjectionMatrix(90.0f, (float)GetWindowWidth(), (float)GetWindowHeight()) * m_rtCamera.GetViewMatrixFromQuaternion());
+			m_particleShader.bind();
+			m_particleShader.bindUniform("mvp", pv * m_emitterTransform);
+			m_emitter->Draw();
+
+			Gizmos::draw(pv);
 		}
 		m_renderTarget.unbind();
 
@@ -231,12 +447,12 @@ protected:
 				}
 
 				// Draw lights.
-				for (int i = 0; i < m_scene->GetNumPointLights(); i++)
+				for (int i = 0; i < m_scene->GetPointLights()->size(); i++)
 				{
 					PointLight &light = m_scene->GetPointLights()->data()[i];
 					Gizmos::addSphere(light.position, 0.1f, 6, 8, light.color);
 				}
-				for (int i = 0; i < m_scene->GetNumSpotLights(); i++)
+				for (int i = 0; i < m_scene->GetSpotLights()->size(); i++)
 				{
 					SpotLight &light = m_scene->GetSpotLights()->data()[i];
 					Gizmos::addSphere(light.position, 0.1f, 6, 8, light.color);
@@ -330,18 +546,33 @@ protected:
 			#pragma endregion
 			}
 
+			// Draw animation.
+			glm::vec3 hipPos = glm::vec3(m_hipBone[3].x, m_hipBone[3].y, m_hipBone[3].z);
+			glm::vec3 kneePos = glm::vec3(m_kneeBone[3].x, m_kneeBone[3].y, m_kneeBone[3].z);
+			glm::vec3 anklePos = glm::vec3(m_ankleBone[3].x, m_ankleBone[3].y, m_ankleBone[3].z);
+			glm::vec4 half(0.5f);
+			glm::vec4 pink(1, 0, 1, 1);
+			Gizmos::addAABBFilled(hipPos, half, pink, &m_hipBone);
+			Gizmos::addAABBFilled(kneePos, half, pink, &m_kneeBone);
+			Gizmos::addAABBFilled(anklePos, half, pink, &m_ankleBone);
+
 			// Draw scene.
 			m_scene->Draw();
 
 			// Draw render target quad.
-			glm::mat4 pv = (m_camera.GetProjectionMatrix(90.0f, (float)GetWindowWidth(), (float)GetWindowHeight()) * m_camera.GetViewMatrix());
+			glm::mat4 pv = (m_camera.GetProjectionMatrix(90.0f, (float)GetWindowWidth(), (float)GetWindowHeight()) * m_camera.GetViewMatrixFromQuaternion());
 			m_textureShader.bind();
 			m_textureShader.bindUniform("mvp", pv * m_quadTransform);
-			m_textureShader.bindUniform("view", m_camera.GetViewMatrix());
+			m_textureShader.bindUniform("view", m_camera.GetViewMatrixFromQuaternion());
 			m_textureShader.bindUniform("model", m_quadTransform);
 			m_renderTarget.getTarget(0).bind(8);
 			m_textureShader.bindUniform("diffuseTex", 8);
 			m_quadMesh.Draw();
+
+			// Draw Particle Emitter.
+			m_particleShader.bind();
+			m_particleShader.bindUniform("mvp", pv * m_emitterTransform);
+			m_emitter->Draw();
 
 			// Draw gizmos.
 			Gizmos::draw(pv);
@@ -379,6 +610,19 @@ private:
 		~Planet() { delete[] moons; moons = nullptr; } // Should be called when out of scope.
 	};
 
+	struct KeyFrame
+	{
+		glm::vec3 position;
+		glm::quat rotation;
+	};
+
+	KeyFrame m_hipFrames[2];
+	KeyFrame m_kneeFrames[2];
+	KeyFrame m_ankleFrames[2];
+	glm::mat4 m_hipBone;
+	glm::mat4 m_kneeBone;
+	glm::mat4 m_ankleBone;
+
 	Camera m_camera; // Main scene camera.
 	Camera m_rtCamera; // Render target camera.
 
@@ -390,12 +634,18 @@ private:
 	aie::ShaderProgram m_postProcessShader;
 	aie::ShaderProgram m_shader;
 	aie::ShaderProgram m_textureShader;
+	aie::ShaderProgram m_particleShader;
 
 	glm::mat4 m_quadTransform;
 	glm::mat4 m_spearTransform;
 	Mesh m_fullscreenMesh; // For post processing, unused.
 	Mesh m_quadMesh;
 	Mesh m_spearMesh;
+
+	Mesh m_primitiveMesh;
+
+	glm::mat4 m_emitterTransform;
+	ParticleEmitter *m_emitter;
 
 	Scene *m_scene;
 

@@ -13,11 +13,16 @@ in vec3 vViewPosition;
 
 uniform sampler2D diffuseTex;
 
+uniform bool drawFog = false;
+
 void main()
 {
 	float fogDistance = length(vViewPosition);
 	float fogAmount = smoothstep(0.1, 25.0, fogDistance);
 
 	// Output texture with the worst fog effect of all time.
-	fragColor = mix(texture(diffuseTex, vTexCoords), vec4(0.25, 0.25, 0.25, 1.0), fogAmount);
+	if (drawFog == true)
+		fragColor = mix(texture(diffuseTex, vTexCoords), vec4(0.25, 0.25, 0.25, 1.0), fogAmount);
+	else
+		fragColor = texture(diffuseTex, vTexCoords);
 }

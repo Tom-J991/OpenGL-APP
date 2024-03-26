@@ -20,12 +20,26 @@ public:
 		glm::vec4 tangent;
 	};
 
+	enum PrimitiveID
+	{
+		PRIMITIVE_TRIANGLE = 0,
+		PRIMITIVE_QUAD,
+		PRIMITIVE_CUBE,
+		PRIMITIVE_PYRAMID,
+		PRIMITIVE_CONE,
+		PRIMITIVE_CYLINDER,
+		PRIMITIVE_SPHERE,
+
+		PRIMITIVE_COUNT
+	};
+
 public:
 	Mesh();
 	virtual ~Mesh();
 
 	void InitializeQuad();
 	void InitializeFullscreenQuad();
+	void InitializePrimitive(PrimitiveID type);
 	void Initialize(unsigned int vertexCount, const Vertex *vertices, unsigned int indexCount = 0, unsigned int *indices = nullptr);
 	void InitializeFromFile(const char *filePath);
 
